@@ -1,0 +1,26 @@
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+  name: node-app-deployment
+spec:
+  replicas: 6 
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values:
+          - nginx
+          - web 
+  template:
+    metadata:
+      labels: 
+        name: demo 
+        app: nginx 
+        env: test
+    spec:
+      containers:
+      - name: nginx
+        image: saritaRyadav/node-app:latest
+        ports:
+        - containerPort: 80
+      
