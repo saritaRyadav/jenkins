@@ -61,7 +61,7 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        withCredentials([usernameColonPassword(credentialsId: '6aa58d28-304f-43c4-9c29-4ecbec0755f4', variable: '')]) {
+                        withCredentials([usernameColonPassword(credentialsId: 'new-docker-cred', variable: '')]) {
     // some block
 }
                         usernameVariable: 'DOCKER_USER',

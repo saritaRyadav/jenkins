@@ -1,8 +1,5 @@
 pipeline {
-    agent    {
-        
-        label 'node-agent'
-    }
+    agent any
 
     environment {
         DOCKER_REPO = "saritaRyadav"
@@ -20,7 +17,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/saritaRyadav/node-app.git'
+                    url: 'https://github.com/saritaRyadav/jenkins.git'
             }
         }
 
@@ -159,6 +156,163 @@ pipeline {
             sh '''
             docker logout || true
             docker image prune -f || true
+            '''
+        }
+
+        success {
+            echo "Pipeline completed successfully."
+        }
+
+        failure {
+            echo "Pipeline failed."
+        }
+    }
+}
+
+
+---
+
+
+pipeline {
+    agent any
+
+        tools {
+        git 'Default'
+    }
+
+
+    environment {
+        DOCKERHUB_USERNAME = "saritaRyadav"
+        IMAGE_NAME = "node-app"
+
+        AWS_REGION = "ap-south-1"
+        CLUSTER_NAME = "demo-saritaekscluster"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/saritaRyadav/jenkins.git'
+            }
+        }
+
+
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
+            }
+        }
+
+        
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                docker build -t ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${BUILD_NUMBER} .
+                '''
+            }
+        }
+
+        stage('Docker Login') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'new-docker-cred',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                    echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+                    '''
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                sh '''
+                docker push ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${BUILD_NUMBER}
+                '''
+            }
+        }
+
+        stage('Update Kubernetes Manifest') {
+            steps {
+                sh '''
+                sed -i "s|image:.*|image: ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${BUILD_NUMBER}|g" jenkins/deployment.yaml
+
+                echo "Updated deployment.yaml"
+
+                cat jenkins/deployment.yaml
+                '''
+            }
+        }
+
+        stage('Create EKS Cluster') {
+            steps {
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws_creds']
+                ]) {
+                    sh '''
+                    if aws eks describe-cluster --name ${CLUSTER_NAME} --region ${AWS_REGION} >/dev/null 2>&1
+                    then
+                        echo "Cluster already exists."
+                    else
+                        echo "Creating EKS Cluster..."
+
+                        eksctl create cluster \
+                          --name ${CLUSTER_NAME} \
+                          --region ${AWS_REGION} \
+                          --nodegroup-name workers \
+                          --node-type t3.medium \
+                          --nodes 2 \
+                          --managed
+
+                        echo "Cluster Created Successfully."
+                    fi
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                withCredentials([
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws_creds']
+                ]) {
+                    sh '''
+                    aws eks update-kubeconfig \
+                      --region ${AWS_REGION} \
+                      --name ${CLUSTER_NAME}
+
+                    kubectl apply -f jenkins/
+
+                    kubectl rollout status deployment/node-app
+
+                    echo "Cluster Nodes"
+                    kubectl get nodes
+
+                    echo "Pods"
+                    kubectl get pods
+
+                    echo "Services"
+                    kubectl get svc
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            sh '''
+            docker logout || true
+            docker system prune -af || true
             '''
         }
 
