@@ -1,7 +1,7 @@
 pipeline {
     agent    {
         
-        label 'node-new'
+        label 'node-agent'
     }
 
     environment {
