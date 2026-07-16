@@ -112,7 +112,7 @@ pipeline {
                             --name ${CLUSTER_NAME} \
                             --region ${AWS_REGION} \
                             --nodegroup-name ${NODEGROUP_NAME} \
-                            --node-type t3.medium \
+                            --node-type c7i-flex.large \
                             --nodes 2 \
                             --nodes-min 1 \
                             --nodes-max 3 \
