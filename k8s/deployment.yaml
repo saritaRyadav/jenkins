@@ -14,6 +14,6 @@ spec:
     spec:
       containers:
       - name: node-app
-        image: saritaRyadav/node-app:latest
+        image: saritaryadav/node-app:latest
         ports:
         - containerPort: 3000

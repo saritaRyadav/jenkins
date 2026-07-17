@@ -1,7 +1,7 @@
 pipeline{
     agent any
     environment {
-        DOCKER_REPO = "saritaRyadav"
+        DOCKER_REPO = "saritaryadav"
         DOCKER_USER = "node-app"
         IMAGE_NAME = "node-app"
         CONTAINER_NAME = "node-container"
@@ -83,7 +83,7 @@ pipeline{
                 steps {
           
                     sh '''
-                     sed -i "s|saritaRyadav/node-app:latest|${DOCKER_REPO}/${DOCKER_USER}:${BUILD_NUMBER}|g" k8s/deployment.yaml
+                     sed -i "s|saritaryadav/node-app:latest|${DOCKER_REPO}/${DOCKER_USER}:${BUILD_NUMBER}|g" k8s/deployment.yaml
                     '''
                     sh 'cat k8s/deployment.yaml'
                 }
