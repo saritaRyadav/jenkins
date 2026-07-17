@@ -12,7 +12,7 @@ pipeline{
         stage('Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/saritaRyadav/jenkins.git'
+                    url: 'https://github.com/saritaRyadav/node-app.git'
             }
         }
         stage('Verify Environment') {
