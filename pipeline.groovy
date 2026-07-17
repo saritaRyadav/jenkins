@@ -14,7 +14,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -51,9 +50,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh '''
-                docker build -t ${IMAGE_NAME}:${BUILD_NUMBER} .
-                '''
+                sh 'docker build -t ${DOCKER_REPO}:${BUILD_NUMBER} .'
             }
         }
 
@@ -61,77 +58,43 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        withCredentials([usernameColonPassword(credentialsId: 'new-docker-cred', variable: '')]) {
-    // some block
-}
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
-                    sh '''
-                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                    '''
-                }
-            }
-        }
-
-        stage('Tag Docker Image') {
-            steps {
-                withCredentials([
-                    usernamePassword(
                         credentialsId: 'docker-hub',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
-                    sh '''
-                    docker tag ${IMAGE_NAME}:${BUILD_NUMBER} \
-                    $DOCKER_USER/node-demo-app:${BUILD_NUMBER}
-
-                    docker tag ${IMAGE_NAME}:${BUILD_NUMBER} \
-                    $DOCKER_USER/node-demo-app:latest
-                    '''
+                    sh 'echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin'
                 }
             }
         }
 
         stage('Push Docker Image') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'docker-hub',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
-                    sh '''
-                    docker push $DOCKER_USER/node-demo-app:${BUILD_NUMBER}
-                    docker push $DOCKER_USER/node-demo-app:latest
-                    '''
-                }
+                sh '''
+                docker push ${DOCKER_REPO}:${BUILD_NUMBER}
+                docker tag ${DOCKER_REPO}:${BUILD_NUMBER} ${DOCKER_REPO}:latest
+                docker push ${DOCKER_REPO}:latest
+                '''
             }
         }
 
         stage('Deploy Container') {
             steps {
                 sh '''
-                docker rm -f node-demo-container || true
+                docker rm -f ${CONTAINER_NAME} || true
 
                 docker run -d \
-                --name node-demo-container \
-                -p 3000:3000 \
-                node-demo-app:${BUILD_NUMBER}
-                '''
-            }
-}
-
-        stage('Verify Deployment') {
-            steps {
-                sh '''
-                docker ps
+                    --name ${CONTAINER_NAME} \
+                    -p 3000:3000 \
+                    ${DOCKER_REPO}:${BUILD_NUMBER}
                 '''
             }
         }
-    }
 
+        stage('Verify Deployment') {
+            steps {
+                sh 'docker ps'
+            }
+        }
+    }
 }

@@ -1,13 +1,12 @@
-pipeline{
+pipeline {
     agent any
+
     environment {
-        DOCKER_REPO = "saritaryadav"
-        DOCKER_USER = "node-app"
-        IMAGE_NAME = "node-app"
-        CONTAINER_NAME = "node-container"
+        DOCKER_REPO = "sariiryadav1323/node-app"
         CLUSTER_NAME = "demo-saritaekscluster"
         REGION = "ap-south-1"
     }
+
     stages {
         stage('Checkout') {
             steps {
@@ -15,6 +14,7 @@ pipeline{
                     url: 'https://github.com/saritaRyadav/node-app.git'
             }
         }
+
         stage('Verify Environment') {
             steps {
                 sh '''
@@ -29,98 +29,70 @@ pipeline{
                 '''
             }
         }
+
         stage('Install Dependencies') {
             steps {
-                sh 'npm install' 
+                sh 'npm install'
             }
         }
+
         stage('Run Tests') {
             steps {
                 sh 'npm test'
             }
         }
+
         stage('Build Docker Image') {
             steps {
+                sh 'docker build -t ${DOCKER_REPO}:${BUILD_NUMBER} .'
+            }
+        }
+
+        stage('Docker Login') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'new-docker-cred',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    sh 'echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin'
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                sh 'docker push ${DOCKER_REPO}:${BUILD_NUMBER}'
+            }
+        }
+
+        stage('Update Deployment Manifest') {
+            steps {
                 sh '''
-                docker build -t ${DOCKER_REPO}:${BUILD_NUMBER} .
-                ''' 
+                sed -i "s|image: .*|image: ${DOCKER_REPO}:${BUILD_NUMBER}|g" k8s/deployment.yaml
+                cat k8s/deployment.yaml
+                '''
             }
         }
-        stage('Docker login'){
-            steps{
-               withCredentials([
-                        usernamePassword(
-                            credentialsId: 'new-docker-cred',
-                            usernameVariable: 'DOCKER_USERNAME',
-                            passwordVariable: 'DOCKER_PASSWORD'
-                        )
-                    ]) 
-                    {
-                        sh 'docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}'
-                    }
-                }
-            }
-        stage('Docker push'){
-            steps{
-               withCredentials([
-                        usernamePassword(
-                            credentialsId: 'new-docker-cred',
-                            usernameVariable: 'DOCKER_USERNAME',
-                            passwordVariable: 'DOCKER_PASSWORD'
-                        )
-                    ]) 
-                    {
-                        sh '''
-                            docker tag ${DOCKER_REPO}:${BUILD_NUMBER} \
-                            ${DOCKER_REPO}/${DOCKER_USER}:${BUILD_NUMBER}
 
-                            docker push ${DOCKER_REPO}/${DOCKER_USER}:${BUILD_NUMBER}
-                        '''
-                    }
-                }
-            }
-            stage('Image-Name-change'){
-                steps {
-          
+        stage('Deploy to Cluster') {
+            steps {
+                withCredentials([aws(credentialsId: 'aws_creds', accessKeyVariable: 'AWS_ACCESS_KEY_ID', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     sh '''
-                     sed -i "s|saritaryadav/node-app:latest|${DOCKER_REPO}/${DOCKER_USER}:${BUILD_NUMBER}|g" k8s/deployment.yaml
+                    aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${REGION}
+                    kubectl apply -f k8s/deployment.yaml
+                    kubectl apply -f k8s/service.yaml
+                    kubectl get pods
+                    kubectl get deployment
+                    kubectl get svc
                     '''
-                    sh 'cat k8s/deployment.yaml'
-                }
-            }
-            stage('Deploy to cluster'){
-                steps{
-                    withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'aws_creds', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                         sh '''
-                            aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${REGION}
-                            
-                            kubectl get nodes
-                            kubectl apply -f k8s/deployment.yaml
-                            kubectl apply -f k8s/service.yaml
-                            kubectl get pods 
-                            kubectl get deployment
-                            kubectl get svc 
-                         '''
-                    }
                 }
             }
         }
-        post {
-
-                success {
-                    echo "Application deployed successfully to Amazon EKS."
-                }
-
-                failure {
-                    echo "Pipeline failed. Please check the logs."
-                }
-
-                always {
-                    cleanWs()
-                }
-            }
-
     }
+}
 
 
 
